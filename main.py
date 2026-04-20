@@ -3,6 +3,7 @@ import math
 from PIL import Image
 import os
 from fpdf import FPDF
+import base64
 
 # 1. CONFIGURAÇÃO DA PÁGINA
 st.set_page_config(
@@ -54,6 +55,13 @@ def gerar_pdf(taxa, vel, esp, vazao, pontas_selecionadas, unidade):
         pdf.ln(4)
     return pdf.output()
 
+# --- FUNÇÃO PARA MOSTRAR PRÉVIA DO PDF ---
+def visualizar_pdf(pdf_bytes):
+    base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
+    # O iframe permite ver o PDF dentro da página. Ajustamos a altura para 500px.
+    pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="500" type="application/pdf"></iframe>'
+    st.markdown(pdf_display, unsafe_allow_html=True)
+
 # --- 2. LOGO E TITULO ---
 nome_arquivo_logo = "logo.png"
 if os.path.exists(nome_arquivo_logo):
@@ -63,43 +71,30 @@ col_tit, col_btn = st.columns([2, 1])
 with col_tit:
     st.title("Calculadora de Aplicacao")
 
-# --- 3. INPUTS COM VARIACOES ESPECIFICAS ---
+# --- 3. INPUTS ---
 st.subheader("Parametros de Operacao")
 
 c1, c2 = st.columns(2)
 with c1:
-    # Velocidade: 0.5 em 0.5
     v_kmh = st.number_input("Velocidade (km/h)", min_value=0.1, value=8.0, step=0.5, format="%.1f")
-    # Espacamento: 5 em 5
     esp_cm = st.number_input("Espacamento (cm)", min_value=1.0, value=50.0, step=5.0, format="%.0f")
 with c2:
-    # Taxa: 5 em 5
     taxa_lha = st.number_input("Taxa de Aplicacao (L/ha)", min_value=1.0, value=100.0, step=5.0, format="%.0f")
     unidade_p = st.selectbox("Unidade de Pressao:", ["psi", "bar", "kPa"])
 
-# Lógica de step para a Pressao
 if unidade_p == "psi":
-    passo_p = 5.0
-    val_min_padrao = 30.0
-    val_max_padrao = 60.0
-    formato = "%.0f"
+    passo_p, val_min_p, val_max_p, formato = 5.0, 30.0, 60.0, "%.0f"
 elif unidade_p == "bar":
-    passo_p = 0.5
-    val_min_padrao = 2.0
-    val_max_padrao = 4.0
-    formato = "%.1f"
+    passo_p, val_min_p, val_max_p, formato = 0.5, 2.0, 4.0, "%.1f"
 else: # kPa
-    passo_p = 50.0
-    val_min_padrao = 200.0
-    val_max_padrao = 400.0
-    formato = "%.0f"
+    passo_p, val_min_p, val_max_p, formato = 50.0, 200.0, 400.0, "%.0f"
 
 st.subheader("Informacoes da Ponta")
 p1, p2 = st.columns(2)
 with p1:
-    p_min_input = st.number_input(f"P. Minima ({unidade_p})", value=val_min_padrao, step=passo_p, format=formato)
+    p_min_input = st.number_input(f"P. Minima ({unidade_p})", value=val_min_p, step=passo_p, format=formato)
 with p2:
-    p_max_input = st.number_input(f"P. Maxima ({unidade_p})", value=val_max_padrao, step=passo_p, format=formato)
+    p_max_input = st.number_input(f"P. Maxima ({unidade_p})", value=val_max_p, step=passo_p, format=formato)
 
 # --- 4. LOGICA DE CALCULO ---
 def converter_para_psi(valor, unidade):
@@ -130,7 +125,7 @@ tabela_iso = {
     "ISO 05 (Marrom)": {"vazao": 1.89, "cor_bg": "#8B4513", "rgb": (139, 69, 19), "txt_rgb": (255, 255, 255), "cor_txt": "white"}
 }
 
-# --- 5. RESULTADOS ---
+# --- 5. RESULTADOS E PREVIA ---
 pontas_encontradas_lista = []
 encontrou_ponta = False
 
@@ -168,6 +163,8 @@ for nome_ponta, dados in tabela_iso.items():
 
 if encontrou_ponta:
     pdf_raw = gerar_pdf(taxa_lha, v_kmh, esp_cm, vazao_alvo, pontas_encontradas_lista, unidade_p)
+    
+    # Adicionamos o botão de download no local de costume
     with col_btn:
         st.write("") 
         st.download_button(
@@ -176,5 +173,10 @@ if encontrou_ponta:
             file_name="relatorio_calibracao.pdf",
             mime="application/pdf"
         )
+    
+    # NOVA SEÇÃO: PRÉVIA DO RELATÓRIO
+    st.divider()
+    st.subheader("Previa do Relatorio:")
+    visualizar_pdf(pdf_raw)
 else:
     st.warning("Nenhuma ponta atende aos criterios.")
