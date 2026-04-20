@@ -4,7 +4,7 @@ from PIL import Image
 import os
 from fpdf import FPDF
 
-# 1. CONFIGURAÇÃO DA PÁGINA (Foco total no Mobile)
+# 1. CONFIGURAÇÃO DA PÁGINA
 st.set_page_config(
     page_title="Gota Perfeita - Calculadora", 
     layout="centered", 
@@ -34,9 +34,11 @@ def gerar_pdf(taxa, vel, esp, vazao, pontas_selecionadas, unidade):
     pdf.set_font("helvetica", 'B', 10)
     pdf.cell(0, 8, f"Volume a coletar por ponta (Caneca): {vazao:.3f} L/min", 0, 1)
     pdf.ln(5)
+    
     pdf.set_font("helvetica", 'B', 12)
     pdf.cell(0, 10, "Sugestões de Pontas (Configurações de Campo)", 0, 1, 'L')
     pdf.ln(2)
+
     for p in pontas_selecionadas:
         rgb = p['rgb']
         txt_rgb = p['txt_rgb']
@@ -52,41 +54,35 @@ def gerar_pdf(taxa, vel, esp, vazao, pontas_selecionadas, unidade):
         pdf.ln(4)
     return pdf.output()
 
-# --- 2. LOGO E CABEÇALHO ---
+# --- 2. LOGO E TÍTULO ---
 nome_arquivo_logo = "logo.png"
 if os.path.exists(nome_arquivo_logo):
-    st.image(Image.open(nome_arquivo_logo), width=120)
+    st.image(Image.open(nome_arquivo_logo), width=150)
 
 col_tit, col_btn = st.columns([2, 1])
 with col_tit:
     st.title("Calculadora de Aplicação")
 
-# --- 3. ENTRADA DE DADOS (SLIDERS PARA CELULAR) ---
-st.markdown("### 🚜 Parâmetros de Operação")
+# --- 3. INPUTS NO CORPO PRINCIPAL (VOLTANDO AO FORMATO DE DIGITAÇÃO) ---
+st.subheader("Parâmetros de Operação")
 
-# Velocidade com Slider (Fácil de arrastar com o polegar)
-v_kmh = st.slider("Velocidade (km/h)", 1.0, 25.0, 8.0, 0.5)
-
-# Colunas para Taxa e Espaçamento
 c1, c2 = st.columns(2)
 with c1:
-    taxa_lha = st.slider("Taxa (L/ha)", 10, 500, 100, 5)
+    # 'format' e 'step' garantem que o navegador entenda a natureza numérica e facilite a edição
+    v_kmh = st.number_input("Velocidade (km/h)", min_value=0.1, value=8.0, step=0.1, format="%.1f")
+    esp_cm = st.number_input("Espaçamento (cm)", min_value=1.0, value=50.0, step=1.0, format="%.0f")
 with c2:
-    esp_cm = st.slider("Espaçamento (cm)", 20, 100, 50, 5)
+    taxa_lha = st.number_input("Taxa de Aplicação (L/ha)", min_value=1.0, value=100.0, step=1.0, format="%.0f")
+    unidade_p = st.selectbox("Unidade de Pressão:", ["psi", "bar", "kPa"])
 
-st.markdown("### ⚙️ Configuração das Pontas")
-u1, u2 = st.columns([1, 1])
-with u1:
-    unidade_p = st.selectbox("Unidade:", ["psi", "bar", "kPa"])
-
-# Pressões com number_input formatado para abrir teclado numérico
+st.subheader("Informações da Ponta")
 p1, p2 = st.columns(2)
 with p1:
-    p_min_input = st.number_input(f"P. Mínima", value=30.0 if unidade_p == "psi" else 2.0, step=0.1, format="%.1f")
+    p_min_input = st.number_input(f"P. Mínima ({unidade_p})", value=30.0 if unidade_p == "psi" else 2.0, step=0.1, format="%.1f")
 with p2:
-    p_max_input = st.number_input(f"P. Máxima", value=60.0 if unidade_p == "psi" else 4.0, step=0.1, format="%.1f")
+    p_max_input = st.number_input(f"P. Máxima ({unidade_p})", value=60.0 if unidade_p == "psi" else 4.0, step=0.1, format="%.1f")
 
-# --- 4. CÁLCULOS ---
+# --- 4. LÓGICA DE CÁLCULO ---
 def converter_para_psi(valor, unidade):
     if unidade == "bar": return valor * 14.5038
     if unidade == "kPa": return valor * 0.145038
@@ -102,7 +98,7 @@ p_max_psi = converter_para_psi(p_max_input, unidade_p)
 vazao_alvo = (taxa_lha * v_kmh * esp_cm) / 60000
 
 st.divider()
-st.metric(label="Volume alvo por ponta", value=f"{vazao_alvo:.3f} L/min")
+st.metric(label="Volume coletado em uma ponta", value=f"{vazao_alvo:.3f} L/min")
 
 tabela_iso = {
     "ISO 01 (Laranja)": {"vazao": 0.38, "cor_bg": "#FF8C00", "rgb": (255, 140, 0), "txt_rgb": (255, 255, 255), "cor_txt": "white"},
@@ -115,11 +111,11 @@ tabela_iso = {
     "ISO 05 (Marrom)": {"vazao": 1.89, "cor_bg": "#8B4513", "rgb": (139, 69, 19), "txt_rgb": (255, 255, 255), "cor_txt": "white"}
 }
 
-# --- 5. RESULTADOS E PDF ---
+# --- 5. RESULTADOS ---
 pontas_encontradas_lista = []
 encontrou_ponta = False
 
-st.subheader("Pontas Recomendadas:")
+st.subheader("Pontas Sugeridas:")
 
 for nome_ponta, dados in tabela_iso.items():
     q_nominal = dados["vazao"]
@@ -142,10 +138,10 @@ for nome_ponta, dados in tabela_iso.items():
             <div style="background-color: {dados['cor_bg']}; padding: 15px; border-radius: 10px; border: 1px solid #333; margin-bottom: 10px; text-align: center;">
                 <h3 style="color: {dados['cor_txt']}; margin: 0;">{nome_ponta}</h3>
                 <p style="color: {dados['cor_txt']}; font-size: 16px; margin: 5px 0;">
-                    Pressão Alvo: <b>{p_exata_final:.2f} {unidade_p}</b>
+                    Pressão: <b>{p_exata_final:.2f} {unidade_p}</b>
                 </p>
-                <p style="color: {dados['cor_txt']}; font-size: 14px; margin: 0; opacity: 0.9;">
-                    Janela: {vel_min_possivel:.1f} a {vel_max_possivel:.1f} km/h
+                <p style="color: {dados['cor_txt']}; font-size: 14px; margin: 0;">
+                    Velocidade: {vel_min_possivel:.1f} a {vel_max_possivel:.1f} km/h
                 </p>
             </div>
         """, unsafe_allow_html=True)
@@ -156,10 +152,10 @@ if encontrou_ponta:
     with col_btn:
         st.write("") # Espaçador
         st.download_button(
-            label="📥 PDF",
+            label="📥 Relatório",
             data=bytes(pdf_raw),
-            file_name="calibracao_gota.pdf",
+            file_name="relatorio_calibracao.pdf",
             mime="application/pdf"
         )
 else:
-    st.warning("Ajuste os parâmetros para encontrar uma ponta.")
+    st.warning("Nenhuma ponta atende aos critérios.")
