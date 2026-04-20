@@ -15,10 +15,13 @@ st.set_page_config(
 # --- FUNÇÃO PARA GERAR PDF COM ACENTUAÇÃO E FUNDO BRANCO ---
 class PDF(FPDF):
     def header(self):
+        # Pinta o fundo de branco sólido para evitar fundo preto em apps de mensagens
         self.set_fill_color(255, 255, 255)
         self.rect(0, 0, 210, 297, 'F') 
+        
         if os.path.exists("logo.png"):
             self.image("logo.png", 10, 8, 30)
+        
         self.set_font('helvetica', 'B', 16)
         self.set_text_color(0, 0, 0)
         self.cell(0, 10, 'Relatório de Calibração - Gota Perfeita', 0, 1, 'R')
@@ -27,9 +30,12 @@ class PDF(FPDF):
 def gerar_pdf(taxa, vel, esp, vazao, pontas_selecionadas, unidade):
     pdf = PDF()
     pdf.add_page()
+    
+    # Título da seção
     pdf.set_fill_color(240, 240, 240)
     pdf.set_font("helvetica", 'B', 12)
     pdf.cell(0, 10, "Parâmetros de Operação", 1, 1, 'L', 1)
+    
     pdf.set_font("helvetica", size=10)
     pdf.set_text_color(0, 0, 0)
     pdf.cell(0, 8, f"Taxa de Aplicação: {taxa} L/ha", 0, 1)
@@ -40,17 +46,16 @@ def gerar_pdf(taxa, vel, esp, vazao, pontas_selecionadas, unidade):
     pdf.ln(5)
     
     pdf.set_font("helvetica", 'B', 12)
-    pdf.cell(0, 10, "Sugestões Técnicas de Pontas", 0, 1, 'L')
+    pdf.cell(0, 10, "Sugestões de Pontas", 0, 1, 'L')
     pdf.ln(2)
 
-    # Contador para indicar 1ª opção, 2ª opção...
-    for i, p in enumerate(pontas_selecionadas):
+    for p in pontas_selecionadas:
         rgb = p['rgb']
         txt_rgb = p['txt_rgb']
         pdf.set_fill_color(rgb[0], rgb[1], rgb[2])
         pdf.set_text_color(txt_rgb[0], txt_rgb[1], txt_rgb[2])
         pdf.set_font("helvetica", 'B', 12)
-        pdf.cell(0, 10, f" {i+1}ª Opção: {p['nome']}", 1, 1, 'L', 1)
+        pdf.cell(0, 10, f" {p['nome']}", 1, 1, 'L', 1)
         
         pdf.set_text_color(0, 0, 0)
         pdf.set_font("helvetica", size=11)
@@ -58,19 +63,23 @@ def gerar_pdf(taxa, vel, esp, vazao, pontas_selecionadas, unidade):
                 f"-> Janela de Velocidade permitida: {p['v_min']:.1f} a {p['v_max']:.1f} km/h")
         pdf.multi_cell(0, 8, info, 1)
         pdf.ln(4)
+        
     return pdf.output()
 
+# --- FUNÇÃO PARA RENDERIZAR O PDF ---
 def exibir_pdf_iframe(pdf_bytes):
     base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
     pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="600" type="application/pdf" style="background-color: white;"></iframe>'
     st.markdown(pdf_display, unsafe_allow_html=True)
 
 # --- 2. LOGO E TITULO ---
-if os.path.exists("logo.png"):
-    st.image(Image.open("logo.png"), width=150)
+nome_arquivo_logo = "logo.png"
+if os.path.exists(nome_arquivo_logo):
+    st.image(Image.open(nome_arquivo_logo), width=150)
+
 st.title("Calculadora de Aplicação")
 
-# --- 3. INPUTS ---
+# --- 3. INPUTS (COM VARIAÇÕES DE BOTÕES) ---
 st.subheader("Parâmetros de Operação")
 c1, c2 = st.columns(2)
 with c1:
@@ -110,52 +119,52 @@ tabela_iso = {
     "ISO 05 (Marrom)": {"vazao": 1.89, "cor_bg": "#8B4513", "rgb": (139, 69, 19), "txt_rgb": (255, 255, 255), "cor_txt": "white"}
 }
 
-# --- 5. FILTRAGEM DE PONTAS ---
-pontas_possiveis = []
+# --- 5. PROCESSAMENTO E EXIBIÇÃO ---
+pontas_encontradas_lista = []
+encontrou_ponta = False
+
+st.subheader("Pontas Sugeridas:")
 for nome_ponta, dados in tabela_iso.items():
+    q_nominal = dados["vazao"]
     p_min_psi = p_min_input * 14.5038 if unidade_p == "bar" else (p_min_input * 0.145038 if unidade_p == "kPa" else p_min_input)
     p_max_psi = p_max_input * 14.5038 if unidade_p == "bar" else (p_max_input * 0.145038 if unidade_p == "kPa" else p_max_input)
-    v_min_p = dados["vazao"] * math.sqrt(p_min_psi / 40)
-    v_max_p = dados["vazao"] * math.sqrt(p_max_psi / 40)
+    v_min_p = q_nominal * math.sqrt(p_min_psi / 40)
+    v_max_p = q_nominal * math.sqrt(p_max_psi / 40)
     
     if v_min_p <= vazao_alvo <= v_max_p:
-        p_ex_psi = ((vazao_alvo / dados["vazao"]) ** 2) * 40
-        p_ex_f = p_ex_psi / 14.5038 if unidade_p == "bar" else (p_ex_psi / 0.145038 if unidade_p == "kPa" else p_ex_psi)
-        pontas_possiveis.append({
-            "nome": nome_ponta, "pressao": p_ex_f, 
-            "v_min": (v_min_p * 60000) / (taxa_lha * esp_cm), 
-            "v_max": (v_max_p * 60000) / (taxa_lha * esp_cm),
-            "rgb": dados['rgb'], "txt_rgb": dados['txt_rgb'], "cor_bg": dados['cor_bg'], "cor_txt": dados['cor_txt']
+        p_exata_psi = ((vazao_alvo / q_nominal) ** 2) * 40
+        p_exata_f = p_exata_psi / 14.5038 if unidade_p == "bar" else (p_exata_psi / 0.145038 if unidade_p == "kPa" else p_exata_psi)
+        v_min_op = (v_min_p * 60000) / (taxa_lha * esp_cm)
+        v_max_op = (v_max_p * 60000) / (taxa_lha * esp_cm)
+        
+        pontas_encontradas_lista.append({
+            "nome": nome_ponta, "pressao": p_exata_f, "v_min": v_min_op, "v_max": v_max_op,
+            "rgb": dados['rgb'], "txt_rgb": dados['txt_rgb']
         })
 
-if pontas_possiveis:
-    st.subheader("Seleção Técnica")
-    lista_nomes = [p['nome'] for p in pontas_possiveis]
-    escolhidas_nomes = st.multiselect(
-        "Selecione e ordene as pontas para o relatório (a primeira será a 1ª Opção):",
-        options=lista_nomes,
-        default=lista_nomes
+        st.markdown(f"""
+            <div style="background-color: {dados['cor_bg']}; padding: 15px; border-radius: 10px; border: 1px solid #333; margin-bottom: 10px; text-align: center;">
+                <h3 style="color: {dados['cor_txt']}; margin: 0;">{nome_ponta}</h3>
+                <p style="color: {dados['cor_txt']}; font-size: 16px; margin: 5px 0;">Pressão: <b>{p_exata_f:.2f} {unidade_p}</b></p>
+                <p style="color: {dados['cor_txt']}; font-size: 14px; margin: 0;">Velocidade: {v_min_op:.1f} a {v_max_op:.1f} km/h</p>
+            </div>
+        """, unsafe_allow_html=True)
+        encontrou_ponta = True
+
+if encontrou_ponta:
+    pdf_raw = gerar_pdf(taxa_lha, v_kmh, esp_cm, vazao_alvo, pontas_encontradas_lista, unidade_p)
+    
+    st.divider()
+    st.download_button(
+        label="📥 Baixar Relatório PDF",
+        data=bytes(pdf_raw),
+        file_name="relatorio_calibracao.pdf",
+        mime="application/pdf",
+        use_container_width=True
     )
     
-    pontas_para_exibir = [p for name in escolhidas_nomes for p in pontas_possiveis if p['nome'] == name]
-
-    if pontas_para_exibir:
-        for i, p in enumerate(pontas_para_exibir):
-            st.markdown(f"""
-                <div style="background-color: {p['cor_bg']}; padding: 15px; border-radius: 10px; border: 1px solid #333; margin-bottom: 10px; text-align: center;">
-                    <h3 style="color: {p['cor_txt']}; margin: 0;">{i+1}ª Opção: {p['nome']}</h3>
-                    <p style="color: {p['cor_txt']}; font-size: 16px; margin: 5px 0;">Pressão: <b>{p['pressao']:.2f} {unidade_p}</b></p>
-                    <p style="color: {p['cor_txt']}; font-size: 14px; margin: 0;">Velocidade: {p['v_min']:.1f} a {p['v_max']:.1f} km/h</p>
-                </div>
-            """, unsafe_allow_html=True)
-
-        pdf_raw = gerar_pdf(taxa_lha, v_kmh, esp_cm, vazao_alvo, pontas_para_exibir, unidade_p)
-        st.divider()
-        st.download_button(label="📥 Baixar Relatório PDF", data=bytes(pdf_raw), file_name="relatorio_calibracao.pdf", mime="application/pdf", use_container_width=True)
-        with st.expander("👁️ Visualizar Prévia (para Print/Compartilhar)"):
-            st.info("💡 **Dica:** Para compartilhar rapidamente, tire um print ou segure pressionado.")
-            exibir_pdf_iframe(pdf_raw)
-    else:
-        st.info("Selecione pelo menos uma ponta acima para gerar o relatório.")
+    with st.expander("👁️ Visualizar Prévia (para Print/Compartilhar)"):
+        st.info("💡 **Dica:** Para compartilhar rapidamente, tire um print da tela ou segure pressionado sobre o relatório para salvar/enviar.")
+        exibir_pdf_iframe(pdf_raw)
 else:
     st.warning("Nenhuma ponta atende aos critérios.")
