@@ -55,12 +55,11 @@ def gerar_pdf(taxa, vel, esp, vazao, pontas_selecionadas, unidade):
         pdf.ln(4)
     return pdf.output()
 
-# --- FUNÇÃO PARA CRIAR O BOTÃO QUE ABRE EM NOVA ABA ---
-def criar_botao_previa(pdf_bytes):
+# --- FUNÇÃO PARA RENDERIZAR O PDF NO IFRAME ---
+def exibir_pdf_iframe(pdf_bytes):
     base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
-    # Link HTML estilizado como um botão do Streamlit
-    href = f'<a href="data:application/pdf;base64,{base64_pdf}" target="_blank" style="text-decoration: none;"><div style="display: inline-block; padding: 0.5em 1em; color: white; background-color: #FF4B4B; border-radius: 0.5rem; text-align: center; font-weight: 500; border: 1px solid #FF4B4B;">👁️ Abrir Previa</div></a>'
-    st.markdown(href, unsafe_allow_html=True)
+    pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="600" type="application/pdf"></iframe>'
+    st.markdown(pdf_display, unsafe_allow_html=True)
 
 # --- 2. LOGO E TITULO ---
 nome_arquivo_logo = "logo.png"
@@ -94,6 +93,7 @@ with p2:
     p_max_input = st.number_input(f"P. Maxima ({unidade_p})", value=val_max_p, step=passo_p, format=formato)
 
 # --- 4. LOGICA DE CALCULO ---
+# Cálculo de vazão alvo e busca na tabela ISO
 vazao_alvo = (taxa_lha * v_kmh * esp_cm) / 60000
 st.divider()
 st.metric(label="Volume coletado em uma ponta", value=f"{vazao_alvo:.3f} L/min")
@@ -109,26 +109,21 @@ tabela_iso = {
     "ISO 05 (Marrom)": {"vazao": 1.89, "cor_bg": "#8B4513", "rgb": (139, 69, 19), "txt_rgb": (255, 255, 255), "cor_txt": "white"}
 }
 
-# --- 5. RESULTADOS E BOTOES ---
+# --- 5. PROCESSAMENTO E EXIBIÇÃO ---
 pontas_encontradas_lista = []
 encontrou_ponta = False
 
 st.subheader("Pontas Sugeridas:")
-
 for nome_ponta, dados in tabela_iso.items():
     q_nominal = dados["vazao"]
-    v_min_ponta = q_nominal * math.sqrt((val_min_p if unidade_p=="psi" else val_min_p*14.5) / 40) # Lógica simplificada para exibição
-    # (Lógica de cálculo interna mantida conforme anterior para precisão)
-    p_min_psi = val_min_p * 14.5038 if unidade_p == "bar" else (val_min_p * 0.145038 if unidade_p == "kPa" else val_min_p)
-    p_max_psi = val_max_p * 14.5038 if unidade_p == "bar" else (val_max_p * 0.145038 if unidade_p == "kPa" else val_max_p)
-    
+    p_min_psi = p_min_input * 14.5038 if unidade_p == "bar" else (p_min_input * 0.145038 if unidade_p == "kPa" else p_min_input)
+    p_max_psi = p_max_input * 14.5038 if unidade_p == "bar" else (p_max_input * 0.145038 if unidade_p == "kPa" else p_max_input)
     v_min_p = q_nominal * math.sqrt(p_min_psi / 40)
     v_max_p = q_nominal * math.sqrt(p_max_psi / 40)
     
     if v_min_p <= vazao_alvo <= v_max_p:
         p_exata_psi = ((vazao_alvo / q_nominal) ** 2) * 40
         p_exata_f = p_exata_psi / 14.5038 if unidade_p == "bar" else (p_exata_psi / 0.145038 if unidade_p == "kPa" else p_exata_psi)
-        
         v_min_op = (v_min_p * 60000) / (taxa_lha * esp_cm)
         v_max_op = (v_max_p * 60000) / (taxa_lha * esp_cm)
         
@@ -150,18 +145,20 @@ if encontrou_ponta:
     pdf_raw = gerar_pdf(taxa_lha, v_kmh, esp_cm, vazao_alvo, pontas_encontradas_lista, unidade_p)
     
     st.divider()
-    col_baixar, col_previa = st.columns(2)
     
-    with col_baixar:
-        st.download_button(
-            label="📥 Baixar Relatorio",
-            data=bytes(pdf_raw),
-            file_name="relatorio_calibracao.pdf",
-            mime="application/pdf"
-        )
+    # Botão de Download Principal
+    st.download_button(
+        label="📥 Baixar Relatorio PDF",
+        data=bytes(pdf_raw),
+        file_name="relatorio_calibracao.pdf",
+        mime="application/pdf",
+        use_container_width=True
+    )
     
-    with col_previa:
-        # Chama a função que cria o botão/link para abrir em nova aba
-        criar_botao_previa(pdf_raw)
+    # CAMPO EXPANSÍVEL: O "ABRIR E FECHAR"
+    with st.expander("👁️ Visualizar Previa (para Print)"):
+        st.write("Toque e segure na imagem abaixo se desejar salvar ou apenas tire um print.")
+        exibir_pdf_iframe(pdf_raw)
+
 else:
     st.warning("Nenhuma ponta atende aos criterios.")
