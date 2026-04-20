@@ -15,28 +15,25 @@ st.set_page_config(
 # --- FUNÇÃO PARA GERAR PDF COM ACENTUAÇÃO E FUNDO BRANCO ---
 class PDF(FPDF):
     def header(self):
-        # Pinta o fundo de branco sólido
+        # Pinta o fundo de branco sólido para evitar fundo preto em apps de mensagens
         self.set_fill_color(255, 255, 255)
         self.rect(0, 0, 210, 297, 'F') 
         
         if os.path.exists("logo.png"):
             self.image("logo.png", 10, 8, 30)
         
-        # Usamos a fonte Helvetica padrão, mas configurada para UTF-8 no momento da escrita
         self.set_font('helvetica', 'B', 16)
         self.set_text_color(0, 0, 0)
         self.cell(0, 10, 'Relatório de Calibração - Gota Perfeita', 0, 1, 'R')
         self.ln(10)
 
 def gerar_pdf(taxa, vel, esp, vazao, pontas_selecionadas, unidade):
-    # 'unit' em mm e 'format' A4. fpdf2 já lida melhor com unicode por padrão.
     pdf = PDF()
     pdf.add_page()
     
     # Título da seção
     pdf.set_fill_color(240, 240, 240)
     pdf.set_font("helvetica", 'B', 12)
-    # Importante: No fpdf2, strings normais funcionam bem com fontes core se não houver símbolos raros
     pdf.cell(0, 10, "Parâmetros de Operação", 1, 1, 'L', 1)
     
     pdf.set_font("helvetica", size=10)
@@ -62,13 +59,11 @@ def gerar_pdf(taxa, vel, esp, vazao, pontas_selecionadas, unidade):
         
         pdf.set_text_color(0, 0, 0)
         pdf.set_font("helvetica", size=11)
-        # Corrigindo acentuação nas frases
         info = (f"-> Pressão exata para o alvo: {p['pressao']:.2f} {unidade}\n"
                 f"-> Janela de Velocidade permitida: {p['v_min']:.1f} a {p['v_max']:.1f} km/h")
         pdf.multi_cell(0, 8, info, 1)
         pdf.ln(4)
         
-    # Retornamos os bytes. No fpdf2, o padrão de output() já é bytes se não passar nome de arquivo.
     return pdf.output()
 
 # --- FUNÇÃO PARA RENDERIZAR O PDF ---
@@ -84,7 +79,7 @@ if os.path.exists(nome_arquivo_logo):
 
 st.title("Calculadora de Aplicação")
 
-# --- 3. INPUTS ---
+# --- 3. INPUTS (COM VARIAÇÕES DE BOTÕES) ---
 st.subheader("Parâmetros de Operação")
 c1, c2 = st.columns(2)
 with c1:
@@ -94,7 +89,6 @@ with c2:
     taxa_lha = st.number_input("Taxa de Aplicação (L/ha)", min_value=1.0, value=100.0, step=5.0, format="%.0f")
     unidade_p = st.selectbox("Unidade de Pressão:", ["psi", "bar", "kPa"])
 
-# Lógica de step e valores padrão para pressão
 if unidade_p == "psi":
     passo_p, val_min_p, val_max_p, formato = 5.0, 30.0, 60.0, "%.0f"
 elif unidade_p == "bar":
@@ -169,7 +163,8 @@ if encontrou_ponta:
         use_container_width=True
     )
     
-    with st.expander("👁️ Visualizar Prévia (para Print)"):
+    with st.expander("👁️ Visualizar Prévia (para Print/Compartilhar)"):
+        st.info("💡 **Dica:** Para compartilhar rapidamente, tire um print da tela ou segure pressionado sobre o relatório para salvar/enviar.")
         exibir_pdf_iframe(pdf_raw)
 else:
     st.warning("Nenhuma ponta atende aos critérios.")
