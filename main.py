@@ -4,8 +4,12 @@ from PIL import Image
 import os
 from fpdf import FPDF
 
-# 1. CONFIGURAÇÃO DA PÁGINA
-st.set_page_config(page_title="Gota Perfeita - Calculadora", layout="wide")
+# 1. CONFIGURAÇÃO DA PÁGINA (Otimizada para Celular)
+st.set_page_config(
+    page_title="Gota Perfeita - Calculadora", 
+    layout="centered", 
+    initial_sidebar_state="collapsed"
+)
 
 # --- FUNÇÃO PARA GERAR PDF COM CORES E ACENTOS ---
 class PDF(FPDF):
@@ -54,26 +58,37 @@ def gerar_pdf(taxa, vel, esp, vazao, pontas_selecionadas, unidade):
         
     return pdf.output()
 
-# --- 2. BARRA LATERAL ---
+# --- 2. LOGO E TÍTULO ---
 nome_arquivo_logo = "logo.png"
 if os.path.exists(nome_arquivo_logo):
-    st.sidebar.image(Image.open(nome_arquivo_logo), use_container_width=True)
+    st.image(Image.open(nome_arquivo_logo), width=150)
 else:
-    st.sidebar.title("Gota Perfeita")
+    st.title("Gota Perfeita")
 
-st.sidebar.divider()
-st.sidebar.header("Parâmetros de Operação")
-v_kmh = st.sidebar.number_input("Velocidade (km/h)", min_value=0.1, value=8.0, step=0.1)
-taxa_lha = st.sidebar.number_input("Taxa de Aplicação (L/ha)", min_value=1.0, value=100.0, step=1.0)
-esp_cm = st.sidebar.number_input("Espaçamento (cm)", min_value=1.0, value=50.0, step=1.0)
+# Layout de Título e Botão lado a lado
+col_tit, col_btn = st.columns([2, 1])
+with col_tit:
+    st.title("Calculadora de ponta de aplicação")
 
-st.sidebar.divider()
-st.sidebar.header("Informações da Ponta")
-unidade_p = st.sidebar.selectbox("Unidade de Pressão:", ["psi", "bar", "kPa"])
-p_min_input = st.sidebar.number_input(f"Pressão Mínima ({unidade_p})", value=30.0 if unidade_p == "psi" else 2.0)
-p_max_input = st.sidebar.number_input(f"Pressão Máxima ({unidade_p})", value=60.0 if unidade_p == "psi" else 4.0)
+# --- 3. INPUTS NO CORPO PRINCIPAL ---
+st.subheader("Parâmetros de Operação")
 
-# --- 3. LÓGICA ---
+c1, c2 = st.columns(2)
+with c1:
+    v_kmh = st.number_input("Velocidade (km/h)", min_value=0.1, value=8.0, step=0.1)
+    esp_cm = st.number_input("Espaçamento (cm)", min_value=1.0, value=50.0, step=1.0)
+with c2:
+    taxa_lha = st.number_input("Taxa de Aplicação (L/ha)", min_value=1.0, value=100.0, step=1.0)
+    unidade_p = st.selectbox("Unidade de Pressão:", ["psi", "bar", "kPa"])
+
+st.subheader("Informações da Ponta")
+p1, p2 = st.columns(2)
+with p1:
+    p_min_input = st.number_input(f"P. Mínima ({unidade_p})", value=30.0 if unidade_p == "psi" else 2.0)
+with p2:
+    p_max_input = st.number_input(f"P. Máxima ({unidade_p})", value=60.0 if unidade_p == "psi" else 4.0)
+
+# --- 4. LÓGICA DE CÁLCULO ---
 def converter_para_psi(valor, unidade):
     if unidade == "bar": return valor * 14.5038
     if unidade == "kPa": return valor * 0.145038
@@ -88,13 +103,10 @@ p_min_psi = converter_para_psi(p_min_input, unidade_p)
 p_max_psi = converter_para_psi(p_max_input, unidade_p)
 vazao_alvo = (taxa_lha * v_kmh * esp_cm) / 60000
 
-# --- 4. LAYOUT PRINCIPAL ---
-col_tit, col_btn = st.columns([3, 1])
-with col_tit:
-    st.title("Calculadora de ponta de aplicação")
-
+st.divider()
 st.metric(label="Volume coletado em uma ponta", value=f"{vazao_alvo:.3f} L/min")
 
+# TABELA ISO COMPLETA
 tabela_iso = {
     "ISO 01 (Laranja)": {"vazao": 0.38, "cor_bg": "#FF8C00", "rgb": (255, 140, 0), "txt_rgb": (255, 255, 255), "cor_txt": "white"},
     "ISO 015 (Verde)": {"vazao": 0.57, "cor_bg": "#32CD32", "rgb": (50, 205, 50), "txt_rgb": (255, 255, 255), "cor_txt": "white"},
@@ -106,11 +118,11 @@ tabela_iso = {
     "ISO 05 (Marrom)": {"vazao": 1.89, "cor_bg": "#8B4513", "rgb": (139, 69, 19), "txt_rgb": (255, 255, 255), "cor_txt": "white"}
 }
 
-st.divider()
-st.subheader(f"Pontas Sugeridas:")
-
+# --- 5. RESULTADOS ---
 pontas_encontradas_lista = []
 encontrou_ponta = False
+
+st.subheader("Pontas Sugeridas:")
 
 for nome_ponta, dados in tabela_iso.items():
     q_nominal = dados["vazao"]
@@ -130,32 +142,27 @@ for nome_ponta, dados in tabela_iso.items():
         })
 
         st.markdown(f"""
-            <div style="background-color: {dados['cor_bg']}; padding: 20px; border-radius: 10px; border: 2px solid #333; margin-bottom: 15px; text-align: center;">
-                <h2 style="color: {dados['cor_txt']}; margin: 0;">{nome_ponta}</h2>
-                <p style="color: {dados['cor_txt']}; font-size: 18px; margin: 10px 0;">
-                    Para {taxa_lha} L/ha a {v_kmh} km/h: <strong>{p_exata_final:.2f} {unidade_p}</strong>
+            <div style="background-color: {dados['cor_bg']}; padding: 15px; border-radius: 10px; border: 1px solid #333; margin-bottom: 10px; text-align: center;">
+                <h3 style="color: {dados['cor_txt']}; margin: 0;">{nome_ponta}</h3>
+                <p style="color: {dados['cor_txt']}; font-size: 16px; margin: 5px 0;">
+                    Pressão: <b>{p_exata_final:.2f} {unidade_p}</b>
                 </p>
-                <div style="border-top: 1px solid {dados['cor_txt']}; opacity: 0.3; margin: 10px 0;"></div>
-                <p style="color: {dados['cor_txt']}; font-size: 15px; margin: 0;">
-                    <b>Janela de Velocidade Operacional:</b><br>
-                    Mín: {vel_min_possivel:.1f} km/h | Máx: {vel_max_possivel:.1f} km/h
+                <p style="color: {dados['cor_txt']}; font-size: 14px; margin: 0;">
+                    Velocidade: {vel_min_possivel:.1f} a {vel_max_possivel:.1f} km/h
                 </p>
             </div>
         """, unsafe_allow_html=True)
         encontrou_ponta = True
 
-# --- 5. GERAÇÃO DO RELATÓRIO CORRIGIDA ---
+# BOTÃO DE RELATÓRIO (Ativa apenas se houver pontas)
 if encontrou_ponta:
     pdf_raw = gerar_pdf(taxa_lha, v_kmh, esp_cm, vazao_alvo, pontas_encontradas_lista, unidade_p)
-    pdf_final = bytes(pdf_raw) # Conversão para corrigir o erro de bytearray
-    
     with col_btn:
-        st.write(" ") 
         st.download_button(
-            label="📥 Gerar Relatório",
-            data=pdf_final,
-            file_name="relatorio_calibracao.pdf",
+            label="📥 Relatório",
+            data=bytes(pdf_raw),
+            file_name="calibracao_gota_perfeita.pdf",
             mime="application/pdf"
         )
 else:
-    st.error("Nenhuma ponta atende aos critérios.")
+    st.warning("Nenhuma ponta atende aos critérios.")
